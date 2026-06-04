@@ -1,0 +1,8 @@
+{
+  "name": "sentryx",
+  "version": "1.0.0",
+  "description": "Instrument an app with SentryX over MCP: error tracking + distributed tracing + product analytics/funnels, correlated by trace_id. Use to \"instrument my app\", do \"error tracking\" or \"distributed tracing\", \"define a funnel\" / \"product analytics\", \"trace debugging\", \"set up Sentry / SentryX\", wire up \"OTLP\", or \"fix this bug with SentryX\". Teaches the connect-once flow (remote Streamable-HTTP MCP, Bearer org token), the instrument flow (detect stack → 5 product questions → create_project → instrument_hint → apply error+OTLP+track() snippets → define_event/funnel/feature → verify get_funnel), and the fix-bugs flow (search_issues → prepare_fix_bundle). Ships the full MCP tool reference, per-stack copy-paste snippets, and end-to-end recipes.",
+  "author": {
+    "name": "kyzdes"
+  }
+}
