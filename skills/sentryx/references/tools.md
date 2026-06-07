@@ -45,6 +45,19 @@ tools need only a valid token. Results come back as JSON.
 
 ---
 
+## Autonomy — assisted fix loop (scope-gated: `define:write`)
+
+SentryX **records + audits** the fix and tracks each issue's `fix_status`; **you** write the patch and open a **DRAFT** PR with `gh`. SentryX never patches code. `record_fix_attempt` + `link_pr` are idempotent on `idempotency_key`. Order: `record_fix_attempt` → (open draft PR) → `link_pr` → (human merges) → `resolve_issue`.
+
+| Tool | Inputs | Output / when to use |
+|------|--------|----------------------|
+| `record_fix_attempt` | `issue_id` (required), `project_id?`, `summary?`, `idempotency_key?` | `{action_id, issue_id, fix_status:"investigating", was_new}`. Call when you **start** a fix from `prepare_fix_bundle`, **before** opening a PR. Audited; sets `fix_status='investigating'`. Use a stable key (`fix-<issue_id>-<short-sha>`) so a retry records once (`was_new=false`). |
+| `link_pr` | `issue_id` (required), `pr_url` (required), `project_id?`, `summary?`, `idempotency_key?` | `{action_id, issue_id, fix_status:"pr_open", pr_url, was_new}`. Call **after** `gh pr create --draft` returns the URL. Audited; sets `fix_status='pr_open'` + stores `pr_url`. Stable key: `pr-<issue_id>-<pr_number>`. |
+| `resolve_issue` | `issue_id` (required), `project_id?` | `{issue_id, status:"resolved", fix_status:"fixed"}`. Call **only after** a human merged/deployed the PR. Sets the canonical issue `status='resolved'` + `fix_status='fixed'` and logs the resolve. |
+| `list_fix_attempts` | `issue_id` (required), `project_id?` | `{issue_id, actions:[{action_id,action_type,summary,pr_url,status,created_at}], count}`, newest first. **Read.** Check before starting so you don't open a duplicate PR for a fix already in flight. |
+
+---
+
 ## Notes
 
 - **Tool naming.** On the wire the tools are namespaced (e.g. `sentryx.search_issues`); your client surfaces them under the `sentryx` server. This reference uses the bare names.

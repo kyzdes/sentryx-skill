@@ -3,7 +3,7 @@ name: sentryx
 description: Instrument an app with SentryX — a self-hosted Sentry-analog that unifies error tracking, distributed tracing, and product analytics/funnels, correlated by trace_id — exposed over a remote MCP server named `sentryx`. Use whenever the sentryx MCP tools are present (get_started, whoami, create_project, instrument_hint, define_event/funnel/feature, get_funnel, search_issues, get_issue, get_trace, prepare_fix_bundle) or the user mentions SentryX, "instrument my app", "error tracking", "distributed tracing", "define a funnel", "product analytics", "trace debugging", "set up Sentry / SentryX", "OTLP", or "fix this bug with SentryX". Teaches the connect-once flow, the instrument flow (detect stack → 5 product questions → create_project → snippets → define_* → verify), and the fix-bugs flow (search_issues → prepare_fix_bundle). NOT for hosted Sentry.io, Datadog, or PostHog — those are different tools.
 metadata:
   short-description: Instrument an app with SentryX (errors + traces + funnels) over MCP
-  version: "1.0"
+  version: "1.1"
 ---
 
 # SentryX
@@ -66,6 +66,23 @@ Any agent with the org token gets the full read picture:
 2. `prepare_fix_bundle(issue_id)` — **the hero tool.** One call returns a ~250–600-token, fix-ready bundle: summary, exception, in-app frames + source context, breadcrumbs, the correlated trace (with bottleneck), impact (times_seen / affected_users), similar issues, and suspect commits. Fix from this; don't reconstruct it by hand.
 3. Need more? `get_issue(issue_id)` for the latest-event summary, `get_trace(trace_id)` to drill into spans + correlated errors.
 4. Prioritize with `get_funnel` — where users drop off tells you what to fix or build next.
+
+### Close the loop: the assisted-autonomy fix flow
+
+SentryX **records and audits** the fix; **you** do the actual work — read the bundle, write the patch, and open a **DRAFT** PR with `gh`. SentryX never patches code (there is no server-side patch service). The loop, with idempotency so a retried step audits exactly once:
+
+1. `record_fix_attempt(issue_id, summary, idempotency_key)` — call this the moment you start from `prepare_fix_bundle`, **before** opening a PR. Sets the issue's `fix_status='investigating'` and logs an audit entry. Use a stable key like `fix-<issue_id>-<short-sha>` so retries don't double-log.
+2. **Write the fix and open a DRAFT PR yourself** with the GitHub CLI — never push to a protected branch:
+   ```
+   git checkout -b fix/issue-<issue_id>
+   git commit -am "Fix: <summary>"
+   gh pr create --draft --title "Fix: <summary>" --body "Fixes issue #<issue_id> in SentryX. <root cause from prepare_fix_bundle>"
+   ```
+3. `link_pr(issue_id, pr_url, idempotency_key)` — call this **after** `gh pr create` returns the URL. Sets `fix_status='pr_open'` + stores `pr_url`. Use a stable key like `pr-<issue_id>-<pr_number>`.
+4. **A human reviews and merges** the draft PR (the human, not you — you only opened a draft).
+5. `resolve_issue(issue_id)` — call this **only after** the PR is merged/deployed. Sets the issue `status='resolved'`, `fix_status='fixed'`, and logs the resolve.
+
+Use `list_fix_attempts(issue_id)` before starting to check whether a fix is already in flight (don't open a duplicate PR). Full step-by-step recipe: `references/workflow.md` (recipe 2).
 
 ## Tool reference
 

@@ -91,6 +91,49 @@ Don't hand-reconstruct what `prepare_fix_bundle` already returns. Check
 `flags.unsymbolicated` (minified browser frames aren't symbolicated yet) and
 `flags.event_pending` (the event may still be ingesting).
 
+### Close the loop — assisted autonomy (agent-side PR, SentryX audits)
+
+SentryX **records + audits** the fix and tracks each issue's `fix_status`; **you**
+write the patch and open a **DRAFT** PR with `gh`. SentryX never patches code —
+there is no server-side patch service. Every write tool reuses the `define:write`
+scope, is org-scoped, and enforces project + issue ownership. `record_fix_attempt`
+and `link_pr` are idempotent on `idempotency_key`, so a retried step audits once.
+
+```
+# 0) (optional) is a fix already in flight? don't open a duplicate PR.
+list_fix_attempts(issue_id: 42)
+  -> { actions:[{action_type,pr_url,status,created_at}], count }
+
+# 1) you're starting the fix — record it BEFORE touching code:
+record_fix_attempt(issue_id: 42,
+                   summary: "guard nil user in checkout handler",
+                   idempotency_key: "fix-42-a1b2c3d")
+  -> { action_id, issue_id, fix_status: "investigating", was_new }
+
+# 2) write the patch, then open a DRAFT PR YOURSELF (never push to a protected branch):
+#    git checkout -b fix/issue-42
+#    git commit -am "Fix: guard nil user in checkout handler"
+#    gh pr create --draft --title "Fix: guard nil user in checkout handler" \
+#      --body "Fixes SentryX issue #42. Root cause: <from prepare_fix_bundle>."
+
+# 3) link the PR you just opened:
+link_pr(issue_id: 42,
+        pr_url: "https://github.com/acme/shop/pull/17",
+        idempotency_key: "pr-42-17")
+  -> { action_id, issue_id, fix_status: "pr_open", pr_url, was_new }
+
+# 4) a HUMAN reviews + merges the draft PR (you only opened a draft).
+
+# 5) after merge/deploy, resolve the issue:
+resolve_issue(issue_id: 42)
+  -> { issue_id, status: "resolved", fix_status: "fixed" }
+```
+
+Lifecycle: `none` → `investigating` (record_fix_attempt) → `pr_open` (link_pr) →
+`fixed` (resolve_issue, which also sets the canonical issue `status='resolved'`).
+Always **draft** the PR and let a human merge — autonomy here means SentryX
+records and audits the loop, not that the agent self-merges.
+
 ---
 
 ## 3. Analyze a funnel drop-off
